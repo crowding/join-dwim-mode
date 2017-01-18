@@ -36,7 +36,26 @@ Finally, FORMS are run."
 |line2 #comment2"
      (join-dwim)
      (should (equal (buffer-string)
-                    "line1 line2 #comment1 comment2"))))
+                    "line1 line2 #comment1 comment2"))
+     (should (looking-back))))
+
+(ert-deftest jd--test-join-beg-comment-3-3 () ""
+             (jd--test-with-temp-buffer
+                 "line1 #comment1
+line2 #|comment2"
+                 (join-dwim)
+               (should (equal (buffer-string)
+                              "line1 line2 #comment1 comment2"))
+               (should (looking-back "comment1"))))
+
+(ert-deftest jd--test-join-end-code-3-3 () ""
+             (jd--test-with-temp-buffer
+                 "line1| #comment1
+line2 #comment2"
+                 (join-dwim)
+               (should (equal (buffer-string)
+                              "line1 line2 #comment1 comment2"))
+               (should (looking-back "line1"))))
 
 (ert-deftest jd--test-join-beg-3-3 () ""
     (jd--test-with-temp-buffer
@@ -49,10 +68,10 @@ Finally, FORMS are run."
 (ert-deftest jd--test-join-beg-3-2 () ""
   (jd--test-with-temp-buffer
       "line1
-|line2 #comment2"
+|line2 # comment2"
       (join-dwim)
     (should (equal (buffer-string)
-                   "line1 line2 #comment2"))))
+                   "line1 line2 # comment2"))))
 
 (ert-deftest jd--test-join-beg-3-1 () ""
   (jd--test-with-temp-buffer
@@ -74,7 +93,7 @@ Finally, FORMS are run."
 (ert-deftest jd--test-join-beg-2-3 () ""
   (jd--test-with-temp-buffer
       "#comment1
-|line2 #comment2"
+|line2 # comment2"
       (join-dwim)
     (should (equal (buffer-string)
                    "line2 #comment1 comment2"))))
@@ -108,7 +127,7 @@ Finally, FORMS are run."
 (ert-deftest jd--test-join-beg-1-3 () ""
   (jd--test-with-temp-buffer
       "line1 #comment1
-|#comment2"
+|# comment2"
       (join-dwim)
     (should (equal (buffer-string)
                    "line1 #comment1 comment2"))))
@@ -116,10 +135,10 @@ Finally, FORMS are run."
 (ert-deftest jd--test-join-beg-1-2 () ""
   (jd--test-with-temp-buffer
       "line1
-|#comment2"
+|# comment2"
       (join-dwim)
     (should (equal (buffer-string)
-                   "line1 #comment2"))))
+                   "line1 # comment2"))))
 
 (ert-deftest jd--test-join-beg-1-1 () ""
   (jd--test-with-temp-buffer
@@ -139,19 +158,19 @@ Finally, FORMS are run."
 
 (ert-deftest jd--test-join-beg-0-3 () ""
   (jd--test-with-temp-buffer
-      "#comment1
-|#comment2"
+      "# comment1
+|# comment2"
       (join-dwim)
     (should (equal (buffer-string)
-                   "#comment1 comment2"))))
+                   "# comment1 comment2"))))
 
 (ert-deftest jd--test-join-beg-0-2 () ""
   (jd--test-with-temp-buffer
       "
-|#comment2"
+|# comment2"
       (join-dwim)
     (should (equal (buffer-string)
-                   "#comment2"))))
+                   "# comment2"))))
 
 (ert-deftest jd--test-join-beg-0-1 () ""
   (jd--test-with-temp-buffer
@@ -162,10 +181,84 @@ Finally, FORMS are run."
                    "#comment1"))))
 
 (ert-deftest jd--test-join-beg-0-0 () ""
-  (jd--test-with-temp-buffer
-      "
+             (jd--test-with-temp-buffer
+                 "
 |"
-      (join-dwim)
-    (should (equal (buffer-string)
-                   ""))))
+                 (join-dwim)
+               (should (equal (buffer-string)
+                              ""))))
+
+(ert-deftest jd--test-join-beg-buffer () ""
+             (jd--test-with-temp-buffer
+                 "|test1 #comment1
+test2 #comment2"
+                 (join-dwim)
+               (should (equal (buffer-string)
+                              "test1 #comment1
+test2 #comment2"))
+               (should (looking-at "test1"))))
+
+(ert-deftest jd--test-join-end-buffer () ""
+             (jd--test-with-temp-buffer
+                 "test1 #comment1
+test2 #comment2|"
+                 (join-dwim)
+               (should (equal (buffer-string)
+                              "test1 #comment1
+test2 #comment2"))
+               (should (looking-back "comment2"))))
+
+(ert-deftest jd--test-join-multiple () ""
+             (jd--test-with-temp-buffer
+                 "line1 #comment1
+line2 #comment2
+|line3 #comment3"
+                 (join-dwim 2)
+               (should (equal (buffer-string)
+                              "line1 line2 line3 #comment1 comment2 comment3"))))
+
+(ert-deftest jd--test-join-multiple-down () ""
+             (jd--test-with-temp-buffer
+                 "line1| #comment1
+line2 #comment2
+line3 #comment3"
+                 (join-dwim 2)
+               (should (equal (buffer-string)
+                              "line1 line2 line3 #comment1 comment2 comment3"))))
+
+(ert-deftest jd--test-beginning-of-whitespace () ""
+    (jd--test-with-temp-buffer
+        "    |line1 line2 # comment1 comment2")
+  (jd-beginning-of-line-or-comment)
+  (should (bobp)))
+
+(ert-deftest jd--test-beginning-of-code () ""
+    (jd--test-with-temp-buffer
+        "    line1 |line2 # comment1 comment2"
+        (jd-beginning-of-line-or-comment)
+      (should (looking-at "line1"))))
+
+(ert-deftest jd--test-end-of-code () ""
+    (jd--test-with-temp-buffer
+        "    line1 |line2 # comment1 comment2"
+        (jd-end-of-line-or-comment)
+      (should (looking-back "line2"))))
+
+(ert-deftest jd--test-beginning-of-comment () ""
+             (jd--test-with-temp-buffer
+                 "line1 line2 # comment1 |comment2"
+                 (jd-beginning-of-line-or-comment)
+               (should (looking-at "comment1"))))
+
+(ert-deftest jd--test-end-of-comment () ""
+    (jd--test-with-temp-buffer
+        "line1 line2 # comment1 |comment2   "
+        (jd-end-of-line-or-comment)
+      (should (looking-back "comment2"))))
+
+(ert-deftest jd--test-end-of-whitespace () ""
+    (jd--test-with-temp-buffer
+        "line1 line2 # comment1 comment2|   "
+        (jd-end-of-line-or-comment)
+      (should (eobp))))
 

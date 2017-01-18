@@ -4,6 +4,8 @@
   (let ((map (make-sparse-keymap)))
     (define-key map [remap join-line] 'join-dwim)
     (define-key map [remap delete-indentation] 'join-dwim)
+    (define-key map [remap move-beginning-of-line] 'jd-beginning-of-line-or-comment)
+    (define-key map [remap move-end-of-line] 'jd-end-of-line-or-comment)
     map))
 
 (define-minor-mode join-dwim-mode
@@ -50,33 +52,35 @@
    positive values join to following lines."
   (pcase-let ((`(,code-start-1 ,code-end-1 ,comment-mark-1 ,comment-start-1 ,comment-end-1)
                (save-excursion (if (< direction 0) (forward-line -1))
-                               (end-of-line)
                                (jd--comment-markers)))
               (`(,code-start-2 ,code-end-2 ,comment-mark-2 ,comment-start-2 ,comment-end-2)
                (save-excursion (if (>= direction 0) (forward-line))
-                               (end-of-line)
                                (jd--comment-markers))))
-    (unwind-protect
-        (let* ((has-comment-1 (/= comment-mark-1
-                                  comment-start-1))
-               (has-code-1 (/= code-start-1 code-end-1))
-               (has-comment-2 (/= comment-start-2 comment-end-2))
-               (has-code-2 (/= code-start-2 code-end-2))
-               (in-comment
-                (if (< direction 0)
-                    (< comment-mark-2 (point))
-                  (< comment-mark-1 (point))))
-               (code-2-ex
-                (delete-and-extract-region code-start-2 code-end-2))
-               (comment-2-ex
-                (delete-and-extract-region
-                 (if has-comment-1 comment-start-2 comment-mark-2)
-                 comment-end-2)))
-          (delete-region comment-end-1 comment-end-2)
-          (goto-char code-end-1)
-          (jd--insert-and-fixup-whitespace code-2-ex)
-          (goto-char comment-end-1)
-          (jd--insert-and-fixup-whitespace comment-2-ex)))))
+    (unless (= code-start-1 code-start-2)
+      (unwind-protect
+       (let* ((has-comment-1 (/= comment-mark-1
+                                 comment-start-1))
+              (has-code-1 (/= code-start-1 code-end-1))
+              (has-comment-2 (/= comment-start-2 comment-end-2))
+              (has-code-2 (/= code-start-2 code-end-2))
+              (in-comment
+               (if (< direction 0)
+                   (< comment-mark-2 (point))
+                 (< comment-mark-1 (point))))
+              (code-2-ex
+               (delete-and-extract-region code-start-2 code-end-2))
+              (comment-2-ex
+               (delete-and-extract-region
+                (if has-comment-1 comment-start-2 comment-mark-2)
+                comment-end-2)))
+         (delete-region comment-end-1 comment-end-2)
+         (goto-char comment-end-1)
+         (jd--insert-and-fixup-whitespace comment-2-ex)
+         (goto-char code-end-1)
+         (jd--insert-and-fixup-whitespace code-2-ex)
+         (if in-comment
+             (goto-char comment-end-1)
+           (goto-char code-end-1)))))))
 
 (defun jd--insert-and-fixup-whitespace (string)
   (let ((before (copy-marker (point) nil))
@@ -96,15 +100,21 @@
 (defun blank-before ()
   (string-blank-p (string (or (char-after) 32))))
 
+(defun jd--end-of-nonwhitespace ()
+  (interactive)
+  (end-of-line)
+  (skip-syntax-backward " ")
+  (point))
+
 (defun jd--comment-markers (&optional p)
   " returns markers determined from the current line in the following order.
    < Beginning of code
    < end of code
-   < start of comment marker
+   > start of comment marker
    > beginning of comment
-   > end of comment"
+   < end of comment"
   (setq p (or p (point)))
-  (let ((eol (copy-marker (line-end-position) t))
+  (let ((eol (copy-marker (save-excursion (jd--end-of-nonwhitespace))))
         (boc (save-excursion (back-to-indentation) (point-marker))))
     (cond ((save-excursion (end-of-line) (jd--in-line-comment-p)) ;; line has comment?
            (let ((eoc nil) (marker nil) (boa nil) (state nil))
@@ -113,43 +123,59 @@
                (setq state (jd--parse-state))
                (parse-partial-sexp (point) eol nil nil state t) ;to a comment
                (backward-char)
-               (setq eoc (point-marker))
                (setq marker (copy-marker (point) t))
-               (while (eq ?< (char-syntax (char-after))) (forward-char))
+               (skip-syntax-backward " ")
+               (setq eoc (point-marker))
+               (goto-char marker)
+               (skip-syntax-forward "<")
+               (skip-syntax-forward " ")
+               (while (eq ?  (char-syntax (char-after))) (forward-char))
                (setq begin (point-marker)))
              (list boc eoc marker begin eol)))
           (t (save-excursion
                (end-of-line)
-               (list boc eol eol (copy-marker eol t) (copy-marker eol t)))))))
+               (list boc (copy-marker eol nil) eol eol (copy-marker eol nil)))))))
 
 (defun jd--closer-to-beginning-p ()
-  "True if the cursor is closer to the beginning of the line than
-  the end, excluding whitespace and line-ending comments."
-  (let* ((pt (point))
-         (distance-to-beginning
-          (save-excursion
-            (back-to-indentation)
-            (abs (- (point) pt))))
-         (distance-to-end
-          (save-excursion
-            (jd--end-of-line-ignoring-comment-whitespace)
-            (abs (- (point) pt)))))
+  "True if the cursor is closer or equal to the beginning of the
+code line or line comment than the end."
+  (pcase-let* ((pt (point))
+               (`(,code-start ,code-end ,comment-mark ,comment-start ,comment-end)
+                (jd--comment-markers))
+               (in-comment (> pt comment-mark))
+               (distance-to-beginning
+                (abs (- pt (if in-comment comment-start code-start))))
+               (distance-to-end
+                (abs (- pt (if in-comment comment-end code-end)))))
     (>= distance-to-end distance-to-beginning)))
 
-(defun jd--end-of-line-ignoring-comment-whitespace ()
+(defun jd-beginning-of-line-or-comment ()
   (interactive)
-  (when (comment-search-forward (line-end-position) t)
-    (goto-char (match-beginning 0))
-    (skip-syntax-backward " " (line-beginning-position))))
+  (pcase-let ((`(,code-start ,code-end ,comment-mark ,comment-start ,comment-end)
+               (jd--comment-markers)))
+    (skip-backward-along
+     (list comment-start code-start (line-beginning-position)))))
 
-(defun jd--beginning-of-line-or-comment ()
+(defun jd-end-of-line-or-comment ()
   (interactive)
-  (cond ( (comment-search-backward (line-beginning-position))
-          (skip-syntax-forward " " (line-ending-position))
-          (if (eq (point) (line-ending-position))
-              (skip-syntax-backward " " (line-ending-position))))
-        ( t
-          (back-to-indentation))))
+  (pcase-let ((`(,code-start ,code-end ,comment-mark ,comment-start ,comment-end)
+               (save-excursion (end-of-line)
+                               (jd--comment-markers))))
+    (skip-forward-along (list code-end comment-end (line-end-position)))))
+
+(defun skip-forward-along (xs)
+  (when xs
+    (let ((x (car xs)))
+      (if (> x (point))
+          (goto-char x)
+        (skip-forward-along (cdr xs))))))
+
+(defun skip-backward-along (xs)
+  (when xs
+    (let ((x (car xs)))
+      (if (< x (point))
+          (goto-char x)
+        (skip-backward-along (cdr xs))))))
 
 (defun jd--parse-state (&optional p)
   "return the parse state at point"
@@ -168,7 +194,7 @@
 
 ;; (defun jd--open-line-near-point
 ;;   "Open a line before or after the current line, whichever is
-;; closer, autoindent, and place the cursor in the new blank line."
+;; closer, autoindent, and place the cursor in the new blank line. If point is currently in a comment, aligh a new comment marker."
 ;;   (interactive "p")
 ;; )
 
