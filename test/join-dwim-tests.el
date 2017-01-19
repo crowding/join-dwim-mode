@@ -294,6 +294,28 @@ two
 #comment2"))
                  (should (looking-back "two"))))
 
+(ert-deftest jd--test-open-line-before-code () ""
+             (jd--test-with-temp-buffer
+                 "|line1 two #comment1
+#comment2"
+                 (jd-open-line-dwim)
+               (should (equal (buffer-string)
+                              "
+line1 two #comment1
+#comment2"))
+               (should (eolp))))
+
+(ert-deftest jd--test-newline-before-code () ""
+             (jd--test-with-temp-buffer
+                 "|line1 #comment1
+#comment2"
+                 (jd-newline-dwim)
+               (should (equal (buffer-string)
+                              "
+line1 #comment1
+#comment2"))
+               (should (looking-at "line1"))))
+
 (ert-deftest jd--test-newline-under-comment () ""
              (jd--test-with-temp-buffer "line1| two #comment1
 #comment2"

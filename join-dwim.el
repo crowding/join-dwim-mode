@@ -208,26 +208,26 @@ code line or line comment than the end."
     (goto-char mark)))
 
 (defun jd--open-line-under-comment ()
-  (pcase-let* ((pt (point))
-               (`(,code-start ,code-end ,jd-comment-mark ,jd-comment-start ,jd-comment-end)
-                (jd--comment-markers)))
-    (let ((mark (point-marker)))
-      (cond
-       ((and (> jd-comment-end jd-comment-mark) ;line has comment
-             (> code-end (point)))        ;and has code to break to the next line
-        (let ((rgn (delete-and-extract-region jd-comment-mark jd-comment-end)))
-          (newline :interactive t)
-          (end-of-line)
-          (delete-horizontal-space)
-          (goto-char mark)
-          (insert rgn)
-          (goto-char mark)
-          (just-one-space)
-          )
-        )
-       (t ; otherwise just newline
+  (pcase-let* ((`(,code-start ,code-end ,jd-comment-mark ,jd-comment-start ,jd-comment-end)
+                (jd--comment-markers))
+               (mark (point-marker)))
+    (cond
+     ((and (> jd-comment-end jd-comment-mark) ;line has comment
+           (> code-end mark)
+           (> mark code-start)) ;and has code to break to the next line
+      (let ((rgn (delete-and-extract-region jd-comment-mark jd-comment-end)))
         (newline :interactive t)
-        (goto-char mark))))))
+        (end-of-line)
+        (delete-horizontal-space)
+        (goto-char mark)
+        (insert rgn)
+        (goto-char mark)
+        (just-one-space)
+        )
+      )
+     (t ; otherwise just newline
+      (newline :interactive t)
+      (goto-char mark)))))
 
 (defun jd-newline-dwim (&optional arg)
   (interactive "p")
@@ -244,7 +244,8 @@ code line or line comment than the end."
                (`(,code-start ,code-end ,comment-mark ,jd-comment-start ,jd-comment-end)
                 (jd--comment-markers)))
     (cond
-     ((> jd-comment-end comment-mark) ; line has comment
+     ((and (> jd-comment-end comment-mark) ; line has comment
+           (> pt code-start))
       (let ((mark (point-marker))
             (rgn (delete-and-extract-region code-end jd-comment-end)))
         (newline :interactive t)
