@@ -6,6 +6,8 @@
     (define-key map [remap delete-indentation] 'join-dwim)
     (define-key map [remap move-beginning-of-line] 'jd-beginning-of-line-or-comment)
     (define-key map [remap move-end-of-line] 'jd-end-of-line-or-comment)
+    (define-key map [remap open-line] 'jd-open-line-dwim)
+    (define-key map [remap indent-new-comment-line] 'jd-newline-dwim)
     map))
 
 (define-minor-mode join-dwim-mode
@@ -192,10 +194,66 @@ code line or line comment than the end."
                           (beginning-of-defun) (parse-partial-sexp (point) p))))
     (and (nth 4 state) t)))
 
-;; (defun jd--open-line-near-point
-;;   "Open a line before or after the current line, whichever is
-;; closer, autoindent, and place the cursor in the new blank line. If point is currently in a comment, aligh a new comment marker."
-;;   (interactive "p")
-;; )
+(defun jd-open-line-dwim (&optional times)
+  (interactive "p")
+  (let ((times (or times 1)))
+    (dotimes (i times)
+      (if (jd--in-line-comment-p)
+          (jd--open-line-in-comment)
+        (jd--open-line-under-comment)))))
+
+(defun jd--open-line-in-comment ()
+  (let ((mark (point-marker)))
+    (indent-new-comment-line)
+    (goto-char mark)))
+
+(defun jd--open-line-under-comment ()
+  (pcase-let* ((pt (point))
+               (`(,code-start ,code-end ,jd-comment-mark ,jd-comment-start ,jd-comment-end)
+                (jd--comment-markers)))
+    (let ((mark (point-marker)))
+      (cond
+       ((and (> jd-comment-end jd-comment-mark) ;line has comment
+             (> code-end (point)))        ;and has code to break to the next line
+        (let ((rgn (delete-and-extract-region jd-comment-mark jd-comment-end)))
+          (newline :interactive t)
+          (end-of-line)
+          (delete-horizontal-space)
+          (goto-char mark)
+          (insert rgn)
+          (goto-char mark)
+          (just-one-space)
+          )
+        )
+       (t ; otherwise just newline
+        (newline :interactive t)
+        (goto-char mark))))))
+
+(defun jd-newline-dwim (&optional arg)
+  (interactive "p")
+  (let ((arg (or arg 1)))
+    (dotimes (i arg)
+      (cond
+       ((jd--in-line-comment-p)
+        (indent-new-comment-line))
+       (t                              ; not in a comment
+        (jd--newline-under-comment))))))
+
+(defun jd--newline-under-comment ()
+  (pcase-let* ((pt (point))
+               (`(,code-start ,code-end ,comment-mark ,jd-comment-start ,jd-comment-end)
+                (jd--comment-markers)))
+    (cond
+     ((> jd-comment-end comment-mark) ; line has comment
+      (let ((mark (point-marker))
+            (rgn (delete-and-extract-region code-end jd-comment-end)))
+        (newline :interactive t)
+        (save-excursion (goto-char mark)
+                        (insert rgn)
+                        (goto-char mark)
+                        (fixup-whitespace))
+        (save-excursion (end-of-line) (delete-horizontal-space))))
+     (t
+      (newline :interactive t)))))
 
 (provide 'join-dwim)

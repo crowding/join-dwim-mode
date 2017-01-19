@@ -48,15 +48,6 @@ line2 #|comment2"
                               "line1 line2 #comment1 comment2"))
                (should (looking-back "comment1"))))
 
-(ert-deftest jd--test-join-end-code-3-3 () ""
-             (jd--test-with-temp-buffer
-                 "line1| #comment1
-line2 #comment2"
-                 (join-dwim)
-               (should (equal (buffer-string)
-                              "line1 line2 #comment1 comment2"))
-               (should (looking-back "line1"))))
-
 (ert-deftest jd--test-join-beg-3-3 () ""
     (jd--test-with-temp-buffer
      "line1 #comment1
@@ -262,3 +253,65 @@ line3 #comment3"
         (jd-end-of-line-or-comment)
       (should (eobp))))
 
+
+(ert-deftest jd--test-open-line-in-comment () ""
+             (jd--test-with-temp-buffer "line1 #comment1| two
+line2"
+                 (jd-open-line-dwim)
+                 (should (equal (buffer-string)
+                                "line1 #comment1
+#two
+line2"))
+                 (should (looking-back "comment1"))))
+
+(ert-deftest jd--test-open-line-under-comment () ""
+             (jd--test-with-temp-buffer "line1 |two #comment1
+#comment2"
+                 (jd-open-line-dwim)
+                 (should (equal (buffer-string)
+                              "line1 #comment1
+two
+#comment2"))
+                 (should (looking-back "line1 "))))
+
+(ert-deftest jd--test-open-line-under-comment-2 () ""
+             (jd--test-with-temp-buffer "line1| two #comment1
+#comment2"
+                 (jd-open-line-dwim)
+               (should (equal (buffer-string)
+                              "line1 #comment1
+two
+#comment2"))))
+
+(ert-deftest jd--test-open-line-after-code () ""
+             (jd--test-with-temp-buffer
+                 "line1 two| #comment1
+#comment2"
+                 (jd-open-line-dwim)
+                 (should (equal (buffer-string)
+                                "line1 two
+#comment1
+#comment2"))
+                 (should (looking-back "two"))))
+
+(ert-deftest jd--test-newline-under-comment () ""
+             (jd--test-with-temp-buffer "line1| two #comment1
+#comment2"
+                 (jd-newline-dwim)
+               (should (equal (buffer-string)
+                              "line1 #comment1
+two
+#comment2"))
+               (should
+                (looking-at "two"))))
+
+(ert-deftest jd--test-newline-in-comment () ""
+             (jd--test-with-temp-buffer "line1 two #comment1 |two
+#comment2"
+                 (jd-newline-dwim)
+               (should (equal (buffer-string)
+                              "line1 two #comment1
+#two
+#comment2"))))
+
+;; do we want a spill-over option? say no for now.
