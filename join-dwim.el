@@ -13,19 +13,19 @@
 (define-minor-mode join-dwim-mode
   "Join and split DWIM.
 
-   Remaps join-line to join-dwim.
-   Interactively with no argument, this command toggles the mode.
-   A positive prefix argument enables the mode, any other prefix
-   argument disables it.  From Lisp, argument omitted or nil
-   enables the mode, `toggle' toggles the state.
-   Configuration variables:
+   Remaps join-line, indent-new-comment-line, beginning-of-line,
+   end-of-line, and open-line to have behavior respecting line comments.
 
-  This remaps the keys bound to join-lines. The mode map is:
+   The mode map is:
  \\{join-dwim-mode-map}"
 
   :keymap 'join-dwim-mode-map
 
   (join-dwim-enable-if))
+
+(define-globalized-minor-mode global-join-dwim-mode
+  join-dwim-mode
+  join-dwim-enable)
 
 (defun join-dwim-enable-if ()
   (if join-dwim-mode
