@@ -25,12 +25,13 @@
 
 (define-globalized-minor-mode global-join-dwim-mode
   join-dwim-mode
-  join-dwim-enable)
+  join-dwim-enable
+  :keymap join-dwim-mode-map) ;idk why quoted works up there and not here
 
 (defun join-dwim-enable-if ()
   (if join-dwim-mode
-      (join-dwim-enable)
-    (join-dwim-disable)))
+      (join-dwim-disable)
+    (join-dwim-enable)))
 
 (defun join-dwim-enable ())
 
